@@ -19,6 +19,7 @@
 
 from epydemic import *
 
+import networkx
 import numpy
 import random
 
@@ -135,15 +136,44 @@ class EdgeLocus(Locus):
         :param g: the network
         :param n: the node
         :param c: the compartment the node is leaving'''
-        for (nn, mm) in g.edges(n):
-            if (g.node[nn][m.COMPARTMENT] == self._right) and (g.node[mm][m.COMPARTMENT] == self._left):
-                #print 'edge ({m}, {n}) leaves {l}'.format(n = nn, m = mm, l = self._name)
-                self._elements.remove((mm, nn))
-            else:
-                if (g.node[nn][m.COMPARTMENT] == self._left) and (g.node[mm][m.COMPARTMENT] == self._right):
-                    #print 'edge ({n}, {m}) leaves {l}'.format(n = nn, m = mm, l = self._name)
-                    self._elements.remove((nn, mm))
+        if networkx.is_directed(g):
+            in_edges = g.in_edges(n)
+            out_edges = g.out_edges(n)
+        else:
+            # We need to have (n, _) and (_, n) resp for the outbound
+            # and inbound edges for the loops below to work. We'll do
+            # so by using generators to iterate over NetworkX's view
+            # objects. Converting them to lists and reordering tuples
+            # appropriately would blow up memory usage for large graphs.
+            def _inbound(edges):
+                for e in edges:
+                    if e[1] == n:
+                        yield e
+                    else:
+                        yield (e[1], e[0])
 
+            def _outbound(edges):
+                for e in edges:
+                    if e[0] == n:
+                        yield e
+                    else:
+                        yield (e[1], e[0])
+
+            in_edges = _inbound(g.edges(n))
+            out_edges = _inbound(g.edges(n))
+        
+        for (nn, mm) in in_edges:
+            assert mm == n
+            if (g.node[nn][m.COMPARTMENT] == self._left) and (g.node[mm][m.COMPARTMENT] == self._right):
+                #print 'edge ({n}, {m}) enters {l}'.format(n = nn, m = mm, l = self._name)
+                self._elements.add((nn, mm))
+
+        for (nn, mm) in out_edges:
+            assert nn == n
+            if (g.node[nn][m.COMPARTMENT] == self._left) and (g.node[mm][m.COMPARTMENT] == self._right):
+                #print 'edge ({n}, {m}) enters {l}'.format(n = nn, m = mm, l = self._name)
+                self._elements.add((nn, mm))
+        
     def enterHandler( self, m, g, n, c ):
         '''Node enters one of the edge's compartments, add any incident edges
         that now have the correct orientation.
@@ -152,11 +182,36 @@ class EdgeLocus(Locus):
         :param g: the network
         :param n: the node
         :param c: the compartment the node is entering'''
-        for (nn, mm) in g.edges(n):
-            if (g.node[nn][m.COMPARTMENT] == self._right) and (g.node[mm][m.COMPARTMENT] == self._left):
-                #print 'edge ({m}, {n}) enters {l}'.format(n = nn, m = mm, l = self._name)
-                self._elements.add((mm, nn))
-            else:
-                if (g.node[nn][m.COMPARTMENT] == self._left) and (g.node[mm][m.COMPARTMENT] == self._right):
-                    #print 'edge ({n}, {m}) enters {l}'.format(n = nn, m = mm, l = self._name)
-                    self._elements.add((nn, mm))
+        if networkx.is_directed(g):
+            in_edges = g.in_edges(n)
+            out_edges = g.out_edges(n)
+        else:
+            def _inbound(edges):
+                for e in edges:
+                    if e[1] == n:
+                        yield e
+                    else:
+                        yield (e[1], e[0])
+
+            def _outbound(edges):
+                for e in edges:
+                    if e[0] == n:
+                        yield e
+                    else:
+                        yield (e[1], e[0])
+
+            in_edges = _inbound(g.edges(n))
+            out_edges = _outbound(g.edges(n))
+        
+        for (nn, mm) in in_edges:
+            assert mm == n
+            if (g.node[nn][m.COMPARTMENT] == self._left) and (g.node[mm][m.COMPARTMENT] == self._right):
+                #print 'edge ({n}, {m}) enters {l}'.format(n = nn, m = mm, l = self._name)
+                self._elements.add((nn, mm))
+
+        for (nn, mm) in out_edges:
+            assert nn == n
+            if (g.node[nn][m.COMPARTMENT] == self._left) and (g.node[mm][m.COMPARTMENT] == self._right):
+                #print 'edge ({n}, {m}) enters {l}'.format(n = nn, m = mm, l = self._name)
+                self._elements.add((nn, mm))
+        
